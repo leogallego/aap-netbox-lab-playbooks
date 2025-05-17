@@ -1,6 +1,6 @@
 ---
 - name: Configure SNMP community and host on a Cisco IOS router
-  hosts: cisco
+  hosts: platforms_cisco-ios-ios
   gather_facts: false
   tasks:
     - name: Configure SNMP community and host
