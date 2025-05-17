@@ -1,6 +1,6 @@
 ---
 - name: Triage Down Interfaces 
-  hosts: cisco
+  hosts: platforms_cisco-ios-ios
   gather_facts: false
   tasks:
     - name: "Attempt a No shut for {{ inventory_hostname }} {{ interface }}"
