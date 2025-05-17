@@ -1,6 +1,6 @@
 ---
 - name: Gather SNMP configuration from Cisco IOS
-  hosts: cisco
+  hosts: platforms_cisco-ios-ios
   gather_facts: false
 
   tasks:
