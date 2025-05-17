@@ -1,7 +1,7 @@
 ---
 - name: Configure Login Banner on network devices using NetBox Config Context data
   connection: network_cli
-  hosts: sites_cisco-live-emea
+  hosts: all
   gather_facts: false
 
   tasks:
