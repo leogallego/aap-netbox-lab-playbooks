@@ -1,7 +1,7 @@
 ---
 - name: Configure NTP on network devices using NetBox inventory config_context
   connection: network_cli
-  hosts: sites_cisco-live-emea
+  hosts: all
   gather_facts: false
 
   tasks:
