@@ -1,0 +1,160 @@
+---
+- name: Instruqt AAP Setup
+  hosts: localhost
+  become: false
+  gather_facts: false
+
+  collections:
+    - ansible.controller 
+
+  vars:
+    controller_host: localhost
+    SANDBOX_ID: "{{ lookup('env', '_SANDBOX_ID') | default('SANDBOX_ID_NOT_FOUND', true) }}"
+    controller_username: admin
+    controller_password: ansible123!
+    inventory_name: netbox-inventory
+    credentials_name: cat8000v-credential
+    NETBOX_API_VAR: "{{ '{{' }} NETBOX_API {{ '}}' }}"
+    NETBOX_TOKEN_VAR: "{{ '{{' }} NETBOX_TOKEN {{ '}}' }}"
+    
+  
+  tasks:
+    - name: (EXECUTION) Create machine Credentials for the lab
+      ansible.controller.credential:
+        validate_certs: false
+        controller_username: admin
+        controller_password: ansible123!
+        name: cat8000v-credential
+        credential_type: Machine
+        organization: Default
+        inputs:
+          username: admin
+          ssh_key_data: "{{ lookup('file', '/home/rhel/.ssh/id_ed25519' ) }}"
+
+    - name: (EXECUTION) Create credential type for NetBox
+      ansible.controller.credential_type:
+        name: netbox-setup-api
+        description: Credentials type for NetBox
+        kind: cloud
+        inputs: 
+          fields:
+            - id: NETBOX_API
+              type: string
+              label: NetBox Host URL
+            - id: NETBOX_TOKEN
+              type: string
+              label: NetBox API Token
+              secret: true
+          required:
+            - NETBOX_API
+            - NETBOX_TOKEN
+        injectors:
+          env:
+            NETBOX_API: "{{ NETBOX_API_VAR }}"
+            NETBOX_TOKEN: "{{ NETBOX_TOKEN_VAR }}"
+        state: present
+        controller_username: admin
+        controller_password: ansible123!
+        validate_certs: false
+        
+    - name: (EXECUTION) Create credentials for the netbox-setup
+      ansible.controller.credential:
+        validate_certs: false
+        controller_username: admin
+        controller_password: ansible123!
+        name: netbox-setup-creds
+        credential_type: netbox-setup-api
+        organization: Default
+        inputs:
+          NETBOX_API: "http://netbox:8000"
+          NETBOX_TOKEN: "0123456789abcdef0123456789abcdef01234567"
+
+    - name: (EXECUTION) Create new execution environment
+      ansible.controller.execution_environment:
+        validate_certs: false
+        controller_username: admin
+        controller_password: ansible123!
+        name: network-ee
+        image: ghcr.io/ansible-network/autocon-ee:latest
+        pull: missing
+        
+    - name: (EXECUTION) Create new execution environment
+      ansible.controller.execution_environment:
+        validate_certs: false
+        controller_username: admin
+        controller_password: ansible123!
+        name: netbox-ee
+        image:  quay.io/acme_corp/network-netbox-eda-ee:latest
+        pull: missing
+
+    - name: (EXECUTION) Create new Project from git
+      ansible.controller.project:
+        name: "netbox-setup-project"
+        organization: Default
+        state: present
+        scm_type: git
+        scm_url: https://github.com/leogallego/ansible-netbox-setup.git
+        validate_certs: false
+        controller_username: admin
+        controller_password: ansible123!
+
+    - name: (EXECUTION) Create an inventory in automation controller
+      ansible.controller.inventory:
+        name: netbox-setup-inventory
+        organization: Default
+        validate_certs: false
+        controller_username: admin
+        controller_password: ansible123!
+
+    - name: (EXECUTION) Create a new Job Template
+      ansible.controller.job_template:
+        name: "netbox-config-playbook"
+        job_type: "run"
+        organization: "Default"
+        state: "present"
+        inventory: "netbox-setup-inventory"
+        become_enabled: True
+        playbook: "netbox_setup.yml"
+        project: "netbox-setup-project"
+        credential: "netbox-setup-creds"
+        execution_environment: "netbox-ee"
+        validate_certs: false
+        controller_username: admin
+        controller_password: ansible123!        
+
+    - name: Debug SANDBOX_ID
+      ansible.builtin.debug:
+        msg: "https://control.{{ SANDBOX_ID }}.instruqt.io/api/controller/"
+      vars:
+        SANDBOX_ID: "{{ lookup('env', '_SANDBOX_ID') | default('SANDBOX_ID_NOT_FOUND', true) }}"
+    
+    - name: (DECISIONS) Create an AAP Credential
+      ansible.eda.credential:
+        name: "AAP"
+        description: "To execute jobs from EDA"
+        inputs:
+          host: "https://control.{{ SANDBOX_ID }}.instruqt.io/api/controller/"
+          username: "admin"
+          password: "ansible123!"
+        credential_type_name: "Red Hat Ansible Automation Platform"
+        controller_host: "https://control.{{ SANDBOX_ID }}.instruqt.io"
+        controller_username: admin
+        controller_password: ansible123!
+        validate_certs: false
+        organization_name: Default
+      vars:
+        SANDBOX_ID: "{{ lookup('env', '_SANDBOX_ID') | default('SANDBOX_ID_NOT_FOUND', true) }}"
+    
+    - name: (DECISIONS) Create a new DE
+      ansible.eda.decision_environment:
+        controller_host: "https://control.{{ SANDBOX_ID }}.instruqt.io"
+        controller_username: admin
+        controller_password: ansible123!
+        validate_certs: false
+        organization_name: Default
+        name: "NetOps Decision Environment"
+        description: "Decision Environment for NetOps workshop"
+        image_url: "ghcr.io/ansible-network/autocon-de:latest"
+      vars:
+        SANDBOX_ID: "{{ lookup('env', '_SANDBOX_ID') | default('SANDBOX_ID_NOT_FOUND', true) }}"
+

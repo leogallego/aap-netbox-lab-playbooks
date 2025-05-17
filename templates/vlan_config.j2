@@ -1,0 +1,4 @@
+{% for vlan in vlans.json.results %}
+  - vlan_id: {{ vlan.vid }}
+    name: "{{ vlan.name }}"
+{% endfor %}

@@ -1,0 +1,27 @@
+---
+- name: Configure Login Banner on network devices using NetBox Config Context data
+  connection: network_cli
+  hosts: sites_cisco-live-emea
+  gather_facts: false
+
+  tasks:
+    - name: Extract Login Banner from NetBox inventory config_context
+      ansible.builtin.set_fact:
+        login_banner: "{{ hostvars[inventory_hostname].config_context[0].login_banner[0] | default([]) }}"
+
+    - name: Apply Login Banner configuration to Cisco IOS devices
+      when: ansible_network_os == 'cisco.ios.ios'
+      cisco.ios.ios_banner:
+        banner: login
+        text: |
+          "{{ login_banner }}"
+        state: present
+
+    - name: Retrieve running configuration
+      cisco.ios.ios_command:
+        commands: ["show running-config"]
+      register: banner_config
+
+    - name: Display Login Banner configuration
+      ansible.builtin.debug:
+        var: banner_config.stdout_lines

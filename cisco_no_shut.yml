@@ -1,0 +1,19 @@
+---
+- name: Triage Down Interfaces 
+  hosts: cisco
+  gather_facts: false
+  tasks:
+    - name: "Attempt a No shut for {{ inventory_hostname }} {{ interface }}"
+      cisco.ios.ios_interfaces:
+        config:
+          - name: "{{ interface }}"
+            enabled: True
+
+    - name: "Check Interface State for {{ inventory_hostname }} {{ interface }}"
+      cisco.ios.command:
+        commands: show ip interface brief
+      register: int_state
+
+    - name: "Print Event Info"
+      ansible.builtin.debug:
+        var: int_state.stdout_lines[0]

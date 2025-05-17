@@ -1,0 +1,35 @@
+---
+- name: Configure NTP on network devices using NetBox inventory config_context
+  connection: network_cli
+  hosts: sites_cisco-live-emea
+  gather_facts: false
+
+  tasks:
+    - name: Extract NTP servers from NetBox inventory config_context
+      ansible.builtin.set_fact:
+        ntp_servers: "{{ hostvars[inventory_hostname].config_context[0].ntp_servers | default([]) }}"
+
+    - name: Render NTP configuration using Jinja2 template
+      ansible.builtin.template:
+        src: templates/ntp_config.j2
+        dest: /tmp/ntp_config_{{ inventory_hostname }}.yml
+
+    - name: Apply NTP configuration to Cisco IOS devcies
+      when: ansible_network_os == 'cisco.ios.ios'
+      cisco.ios.ios_ntp_global:
+        config: "{{ lookup('file', '/tmp/ntp_config_{{ inventory_hostname }}.yml') | from_yaml }}"
+        state: replaced
+
+    - name: Retrieve running configuration NTP section
+      cisco.ios.ios_command:
+        commands: ["show running-config | section ntp"]
+      register: ntp_config
+
+    - name: Display NTP configuration
+      ansible.builtin.debug:
+        var: ntp_config.stdout_lines
+
+    - name: Remove temporary NTP configuration files
+      ansible.builtin.file:
+        path: "/tmp/ntp_config_{{ inventory_hostname }}.yml"
+        state: absent

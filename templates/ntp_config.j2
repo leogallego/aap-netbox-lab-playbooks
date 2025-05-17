@@ -1,0 +1,4 @@
+servers:
+{% for server in ntp_servers %}
+  - server: "{{ server }}"
+{% endfor %}

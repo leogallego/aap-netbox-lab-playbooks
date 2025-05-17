@@ -1,0 +1,64 @@
+---
+- name: Configure VLANS on network devices using NetBox VLAN data
+  connection: network_cli
+  hosts: sites_cisco-live-emea
+  gather_facts: false
+  vars:
+    netbox_url: "{{ lookup('ansible.builtin.env', 'NETBOX_API') }}"
+    netbox_token: "{{ lookup('ansible.builtin.env', 'NETBOX_TOKEN') }}"
+
+  tasks:
+    - name: 1 - Get Devices
+      ansible.builtin.uri:
+        url: "{{ netbox_url }}/api/dcim/devices/?name={{ inventory_hostname }}"
+        method: GET
+        return_content: true
+        headers:
+          accept: "application/json"
+          Authorization: "Token {{ netbox_token }}"
+      register: device
+
+    - name: 2 - Get Site Details
+      ansible.builtin.uri:
+        url: "{{ netbox_url }}/api/dcim/sites/?name={{ device.json.results[0]['site']['name'] }}"
+        method: GET
+        return_content: true
+        headers:
+          accept: "application/json"
+          Authorization: "Token {{ netbox_token }}"
+      register: site
+
+    - name: 3 - Get List of VLANs for Site {{ device.json.results[0]['site']['name'] }}
+      ansible.builtin.uri:
+        url: "{{ netbox_url }}/api/ipam/vlans/?site_id={{ site.json.results[0]['id'] }}"
+        method: GET
+        return_content: true
+        headers:
+          accept: "application/json"
+          Authorization: "Token {{ netbox_token }}"
+      register: vlans
+
+    - name: Render VLAN configuration using Jinja2 template
+      ansible.builtin.template:
+        src: templates/vlan_config.j2
+        dest: /tmp/vlan_config_{{ inventory_hostname }}.yml
+
+    - name: Apply VLAN configuration to Cisco IOS devices
+      when: ansible_network_os == 'cisco.ios.ios'
+      cisco.ios.ios_vlans:
+        config: "{{ lookup('file', '/tmp/vlan_config_{{ inventory_hostname }}.yml') | from_yaml }}"
+        state: overridden
+
+    - name: Retrieve running configuration VLAN section
+      cisco.ios.ios_command:
+        commands: ["show running-config | section vlan"]
+      register: vlan_config
+
+    - name: Display VLAN configuration
+      ansible.builtin.debug:
+        var: vlan_config.stdout_lines
+
+    - name: Remove temporary NTP configuration files
+      ansible.builtin.file:
+        path: "/tmp/vlan_config_{{ inventory_hostname }}.yml"
+        state: absent
